@@ -1,15 +1,10 @@
-# Corridor — Lower Manhattan walk MVP
+# Corridor
 
-## On the phone
+Lower Manhattan walk planner (south of Chambers).
 
-1. All in-zone spots are visible (no names yet).
-2. Tap start, tap end. A straight orange line appears, plus a street preview.
-3. Tap / pull the fat orange line onto a spot or a street. Snap = named waypoint. Street = plain handle.
-4. Mid-points are sorted so the walk does not backtrack.
-5. Extra Atlas Obscura places within 150 m of the *street* walk become Yes/No cards. Already-snapped places skip the stack.
-6. Done rebuilds the street walk through waypoints + Yes stops.
+Live: https://muraddda.github.io/NYC-HikingTrail/
 
-## Update GitHub Pages
-
-Replace `app.js`, `styles.css`, and `index.html` in the repo root (keep `places.json`).
-Wait a minute, hard-refresh Safari.
+1. Tap start, tap end.
+2. Pull the orange line through the blocks you want.
+3. Select stops, Yes/No extras.
+4. Plan route walks first stop to last stop using street entrances. Dotted lines connect a door to the exhibit when they differ.
