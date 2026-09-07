@@ -49,7 +49,20 @@ html, body {
   pointer-events: none;
 }
 
-.brand, .ghost-btn { pointer-events: auto; }
+.brand, .ghost-btn, .chrome-actions { pointer-events: auto; }
+
+.chrome-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.primary-btn {
+  background: #1c1b18 !important;
+  color: #f3efe6 !important;
+  border-color: #1c1b18 !important;
+}
 
 .brand {
   background: rgba(243, 239, 230, 0.92);
@@ -269,18 +282,28 @@ html, body {
   white-space: nowrap;
 }
 
+.wp-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 180px;
+  pointer-events: none;
+}
+
 .wp-name {
   background: var(--ink);
   color: var(--paper);
-  font-size: 11px;
+  font-size: 12px;
+  font-weight: 500;
   line-height: 1.2;
-  padding: 4px 7px;
+  padding: 5px 8px;
   border-radius: 2px;
   box-shadow: 0 2px 6px rgba(0,0,0,.2);
   white-space: nowrap;
-  max-width: 160px;
+  max-width: 176px;
   overflow: hidden;
   text-overflow: ellipsis;
+  margin-bottom: 4px;
 }
 
 .active-ring {

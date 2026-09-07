@@ -1,5 +1,5 @@
 const CORRIDOR_M = 150;
-const SNAP_M = 30;
+const SNAP_M = 80;
 const MAX_YES = 5;
 const USE_CAP = false;
 const OSRM = "https://router.project-osrm.org/route/v1/foot/";
@@ -35,6 +35,7 @@ const els = {
   btnDone: document.getElementById("btn-done"),
   btnUndo: document.getElementById("btn-undo"),
   btnClear: document.getElementById("btn-clear"),
+  btnReview: document.getElementById("btn-review"),
   summary: document.getElementById("summary"),
   summaryBody: document.getElementById("summary-body"),
 };
@@ -180,9 +181,9 @@ function handleIcon(wp) {
   if (wp.place) {
     return L.divIcon({
       className: "",
-      html: `<div class="wp-name">${wp.place.name}</div><div class="pin-label" style="background:#c45c26">●</div>`,
-      iconSize: [22, 22],
-      iconAnchor: [11, 11],
+      html: `<div class="wp-wrap"><div class="wp-name">${wp.place.name}</div><div class="pin-label" style="background:#c45c26">●</div></div>`,
+      iconSize: [180, 48],
+      iconAnchor: [90, 36],
     });
   }
   return L.divIcon({
@@ -268,8 +269,19 @@ function drawHandles() {
     });
     marker.on("drag", (e) => {
       const ll = e.target.getLatLng();
-      wp.lat = ll.lat;
-      wp.lng = ll.lng;
+      const place = nearestPlace({ lat: ll.lat, lng: ll.lng });
+      if (place) {
+        wp.lat = place.lat;
+        wp.lng = place.lng;
+        wp.place = place;
+        e.target.setLatLng([place.lat, place.lng]);
+        e.target.setIcon(handleIcon(wp));
+      } else {
+        wp.lat = ll.lat;
+        wp.lng = ll.lng;
+        wp.place = null;
+        e.target.setIcon(handleIcon(wp));
+      }
       drawRubber();
     });
     marker.on("dragend", (e) => {
@@ -427,6 +439,7 @@ function openCard() {
   hideHint();
   els.summary.hidden = true;
   els.sheet.hidden = false;
+  if (els.btnReview) els.btnReview.hidden = true;
   const left = pending().length;
   const total = candidates.length;
   els.sheetCount.textContent = `${total - left + 1} of ${total}`;
@@ -474,6 +487,7 @@ async function finishReview() {
   });
   phase = "done";
   els.sheet.hidden = true;
+  if (els.btnReview) els.btnReview.hidden = true;
   hideHint();
   pinLayer.clearLayers();
 
@@ -528,12 +542,15 @@ async function restitchAndCards() {
     streetLine = await stitch(controlPoints());
     drawStreet(streetLine, "#c45c26");
     rebuildCandidates();
-    if (candidates.length === 0) {
-      els.sheet.hidden = true;
-      showHint("Pull the line", "No extra Atlas Obscura stops within 150 m. Drag the orange line onto a block you want, or tap Done.");
-      return;
-    }
-    if (phase !== "done") openCard();
+    if (phase === "done") return;
+    els.sheet.hidden = true;
+    if (els.btnReview) els.btnReview.hidden = false;
+    showHint(
+      "Shape the walk",
+      candidates.length
+        ? "Pull the line onto spots or streets. When it looks right, tap Select stops."
+        : "Pull the line onto spots or streets. Select stops when you are ready."
+    );
   } catch (err) {
     if (err.message === "off-island") {
       toast("That pull left Manhattan. Handle snapped back.");
@@ -546,6 +563,18 @@ async function restitchAndCards() {
 function scheduleRestitch() {
   clearTimeout(restitchTimer);
   restitchTimer = setTimeout(restitchAndCards, 80);
+}
+
+function startSelecting() {
+  if (!start || !end) return;
+  rebuildCandidates();
+  if (!streetLine || candidates.length === 0) {
+    toast("No extra stops within 150 m of this walk. Your waypoints are the route.");
+    finishReview();
+    return;
+  }
+  if (els.btnReview) els.btnReview.hidden = true;
+  openCard();
 }
 
 function finishWaypointMove(wp, pt) {
@@ -645,7 +674,8 @@ function onMapTap(e) {
       scheduleRestitch();
     });
     phase = "shaping";
-    showHint("Pull the line", "Drag the orange line onto a spot or a street. Tap a handle to remove it.");
+    if (els.btnReview) els.btnReview.hidden = false;
+    showHint("Pull the line", "Drag the orange line onto a spot or a street. Then tap Select stops.");
     drawRubber();
     scheduleRestitch();
   }
@@ -672,6 +702,7 @@ function clearAll() {
   els.sheet.hidden = true;
   els.summary.hidden = true;
   els.btnClear.hidden = true;
+  if (els.btnReview) els.btnReview.hidden = true;
   showHint("Tap the map", "First tap is start. Second tap is end. Then pull the line through the blocks you want.");
 }
 
@@ -706,6 +737,7 @@ async function init() {
 
   map.on("click", onMapTap);
   els.btnClear.addEventListener("click", clearAll);
+  if (els.btnReview) els.btnReview.addEventListener("click", startSelecting);
   els.btnYes.addEventListener("click", () => decide("yes"));
   els.btnNo.addEventListener("click", () => decide("no"));
   els.btnDone.addEventListener("click", finishReview);
