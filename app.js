@@ -1,13 +1,22 @@
-const ZONE = {
-  north: 40.7155,
-  south: 40.6985,
-  west: -74.0205,
-  east: -73.9965,
-};
-
 const CORRIDOR_M = 150;
+const SNAP_M = 30;
 const MAX_YES = 5;
+const USE_CAP = false;
 const OSRM = "https://router.project-osrm.org/route/v1/foot/";
+
+const ZONE_POLY = [
+  [40.7155, -74.0178],
+  [40.7155, -74.0012],
+  [40.7128, -73.9978],
+  [40.7088, -73.9968],
+  [40.7048, -73.9976],
+  [40.7016, -74.0008],
+  [40.7004, -74.0088],
+  [40.7006, -74.0168],
+  [40.7034, -74.0188],
+  [40.7078, -74.0186],
+  [40.7120, -74.0176],
+];
 
 const els = {
   hint: document.getElementById("hint"),
@@ -36,20 +45,34 @@ let start = null;
 let end = null;
 let startMarker = null;
 let endMarker = null;
-let routeLine = null;
-let finalLine = null;
-let originalLine = null;
-let candidates = [];
-let hiddenDots = [];
+let waypoints = [];
+let rubberLine = null;
+let grabLine = null;
+let streetLine = null;
+let streetLayer = null;
+let catalogLayer = L.layerGroup();
 let pinLayer = L.layerGroup();
-let dotLayer = L.layerGroup();
-let cardIndex = 0;
+let handleLayer = L.layerGroup();
+let candidates = [];
 let rejectedStack = [];
 let phase = "idle";
 let toastTimer = null;
+let restitchTimer = null;
+let dragging = false;
+
+function pointInPoly(lat, lng, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const yi = poly[i][0], xi = poly[i][1];
+    const yj = poly[j][0], xj = poly[j][1];
+    const inter = yi > lat !== yj > lat && lng < ((xj - xi) * (lat - yi)) / (yj - yi + 1e-12) + xi;
+    if (inter) inside = !inside;
+  }
+  return inside;
+}
 
 function inZone(lat, lng) {
-  return lat <= ZONE.north && lat >= ZONE.south && lng >= ZONE.west && lng <= ZONE.east;
+  return pointInPoly(lat, lng, ZONE_POLY);
 }
 
 function haversine(a, b) {
@@ -64,22 +87,21 @@ function haversine(a, b) {
 }
 
 function projectOnSegment(p, a, b) {
-  const toXY = (pt) => {
-    const x = ((pt.lng - a.lng) * Math.PI) / 180 * Math.cos(((a.lat + b.lat) / 2) * Math.PI / 180);
-    const y = ((pt.lat - a.lat) * Math.PI) / 180;
-    return { x, y };
-  };
-  const A = { x: 0, y: 0 };
-  const B = toXY(b);
-  const P = toXY(p);
-  const dx = B.x - A.x;
-  const dy = B.y - A.y;
-  const len2 = dx * dx + dy * dy;
-  let t = len2 === 0 ? 0 : ((P.x - A.x) * dx + (P.y - A.y) * dy) / len2;
+  const midLat = ((a.lat + b.lat) / 2) * Math.PI / 180;
+  const ax = 0;
+  const ay = 0;
+  const bx = (b.lng - a.lng) * Math.cos(midLat);
+  const by = b.lat - a.lat;
+  const px = (p.lng - a.lng) * Math.cos(midLat);
+  const py = p.lat - a.lat;
+  const len2 = bx * bx + by * by;
+  let t = len2 === 0 ? 0 : (px * bx + py * by) / len2;
   t = Math.max(0, Math.min(1, t));
-  const lat = a.lat + t * (b.lat - a.lat);
-  const lng = a.lng + t * (b.lng - a.lng);
-  return { lat, lng, t };
+  return {
+    lat: a.lat + t * (b.lat - a.lat),
+    lng: a.lng + t * (b.lng - a.lng),
+    t,
+  };
 }
 
 function distanceToLine(point, line) {
@@ -98,6 +120,32 @@ function distanceToLine(point, line) {
     walked += haversine(a, b);
   }
   return { distance: best, along };
+}
+
+function closestOnLine(point, line) {
+  let best = { distance: Infinity, index: 0, lat: point.lat, lng: point.lng };
+  for (let i = 0; i < line.length - 1; i++) {
+    const proj = projectOnSegment(point, line[i], line[i + 1]);
+    const d = haversine(point, proj);
+    if (d < best.distance) best = { distance: d, index: i, lat: proj.lat, lng: proj.lng };
+  }
+  return best;
+}
+
+function axisT(p) {
+  if (!start || !end) return 0;
+  const midLat = ((start.lat + end.lat) / 2) * Math.PI / 180;
+  const vx = (end.lng - start.lng) * Math.cos(midLat);
+  const vy = end.lat - start.lat;
+  const wx = (p.lng - start.lng) * Math.cos(midLat);
+  const wy = p.lat - start.lat;
+  const len2 = vx * vx + vy * vy;
+  if (len2 === 0) return 0;
+  return (wx * vx + wy * vy) / len2;
+}
+
+function sortWaypoints() {
+  waypoints.sort((a, b) => axisT(a) - axisT(b));
 }
 
 function showHint(title, body) {
@@ -119,17 +167,7 @@ function toast(msg) {
   }, 2400);
 }
 
-function markerIcon(kind, label) {
-  if (kind === "num") {
-    return L.divIcon({
-      className: "",
-      html: `<div class="pin-label">${label}</div>`,
-      iconSize: [22, 22],
-      iconAnchor: [11, 11],
-    });
-  }
-  const color = kind === "start" ? "#2f5d4e" : "#1c1b18";
-  const letter = kind === "start" ? "A" : "B";
+function abIcon(letter, color) {
   return L.divIcon({
     className: "",
     html: `<div class="pin-label" style="background:${color}">${letter}</div>`,
@@ -138,68 +176,145 @@ function markerIcon(kind, label) {
   });
 }
 
-function placeDot(place) {
-  return L.circleMarker([place.lat, place.lng], {
-    radius: 3.5,
-    color: "#8a8478",
-    weight: 0,
-    fillColor: "#8a8478",
-    fillOpacity: 0.85,
-    interactive: false,
+function handleIcon(wp) {
+  if (wp.place) {
+    return L.divIcon({
+      className: "",
+      html: `<div class="wp-name">${wp.place.name}</div><div class="pin-label" style="background:#c45c26">●</div>`,
+      iconSize: [22, 22],
+      iconAnchor: [11, 11],
+    });
+  }
+  return L.divIcon({
+    className: "",
+    html: `<div class="pin-label" style="background:#c45c26">+</div>`,
+    iconSize: [22, 22],
+    iconAnchor: [11, 11],
   });
 }
 
-function placePin(place, selected) {
-  return L.circleMarker([place.lat, place.lng], {
-    radius: selected ? 8 : 7,
+function activeIcon() {
+  return L.divIcon({
+    className: "",
+    html: `<div class="active-ring"></div>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+  });
+}
+
+function nearestPlace(pt) {
+  let best = null;
+  let bestD = SNAP_M;
+  for (const place of places) {
+    const d = haversine(pt, place);
+    if (d <= bestD) {
+      best = place;
+      bestD = d;
+    }
+  }
+  return best;
+}
+
+function snappedIds() {
+  const ids = new Set();
+  waypoints.forEach((wp) => {
+    if (wp.place) ids.add(wp.place.id);
+  });
+  return ids;
+}
+
+function controlPoints() {
+  const pts = [];
+  if (start) pts.push(start);
+  waypoints.forEach((wp) => pts.push({ lat: wp.lat, lng: wp.lng }));
+  if (end) pts.push(end);
+  return pts;
+}
+
+function drawRubber() {
+  const pts = controlPoints();
+  const latlngs = pts.map((p) => [p.lat, p.lng]);
+  if (rubberLine) rubberLine.setLatLngs(latlngs);
+  else {
+    rubberLine = L.polyline(latlngs, {
+      color: "#c45c26",
+      weight: 4,
+      opacity: 0.95,
+      interactive: false,
+    }).addTo(map);
+  }
+  if (grabLine) grabLine.setLatLngs(latlngs);
+  else {
+    grabLine = L.polyline(latlngs, {
+      color: "#c45c26",
+      weight: 28,
+      opacity: 0.001,
+      interactive: true,
+    }).addTo(map);
+    grabLine.on("click", onGrabLine);
+  }
+}
+
+function drawHandles() {
+  handleLayer.clearLayers();
+  waypoints.forEach((wp) => {
+    const marker = L.marker([wp.lat, wp.lng], {
+      icon: handleIcon(wp),
+      draggable: true,
+      autoPan: true,
+    }).addTo(handleLayer);
+    marker.on("dragstart", () => {
+      dragging = true;
+    });
+    marker.on("drag", (e) => {
+      const ll = e.target.getLatLng();
+      wp.lat = ll.lat;
+      wp.lng = ll.lng;
+      drawRubber();
+    });
+    marker.on("dragend", (e) => {
+      const ll = e.target.getLatLng();
+      finishWaypointMove(wp, { lat: ll.lat, lng: ll.lng });
+      dragging = false;
+    });
+    marker.on("click", (e) => {
+      L.DomEvent.stop(e);
+      removeWaypoint(wp);
+    });
+  });
+}
+
+function catalogStyle(place) {
+  const snapped = snappedIds().has(place.id);
+  return {
+    radius: snapped ? 8 : 5.5,
     color: "#f3efe6",
     weight: 2,
-    fillColor: selected ? "#2f5d4e" : "#c45c26",
-    fillOpacity: 1,
-    interactive: false,
+    fillColor: snapped ? "#c45c26" : "#1c1b18",
+    fillOpacity: 0.95,
+  };
+}
+
+function drawCatalog() {
+  catalogLayer.clearLayers();
+  places.forEach((place) => {
+    L.circleMarker([place.lat, place.lng], {
+      ...catalogStyle(place),
+      interactive: false,
+    }).addTo(catalogLayer);
   });
 }
 
-function resetMapLayers() {
-  pinLayer.clearLayers();
-  dotLayer.clearLayers();
-  if (routeLine) {
-    map.removeLayer(routeLine);
-    routeLine = null;
-  }
-  if (finalLine) {
-    map.removeLayer(finalLine);
-    finalLine = null;
-  }
+function lineLeavesZone(line) {
+  let outside = 0;
+  line.forEach((p) => {
+    if (!inZone(p.lat, p.lng)) outside += 1;
+  });
+  return outside > Math.max(3, line.length * 0.12);
 }
 
-function clearAll() {
-  start = null;
-  end = null;
-  originalLine = null;
-  candidates = [];
-  hiddenDots = [];
-  cardIndex = 0;
-  rejectedStack = [];
-  phase = "idle";
-  if (startMarker) {
-    map.removeLayer(startMarker);
-    startMarker = null;
-  }
-  if (endMarker) {
-    map.removeLayer(endMarker);
-    endMarker = null;
-  }
-  resetMapLayers();
-  els.sheet.hidden = true;
-  els.summary.hidden = true;
-  els.btnClear.hidden = true;
-  showHint("Tap the map", "First tap is your start. Second tap is your end. Both must sit south of Chambers Street.");
-}
-
-async function fetchRoute(points) {
-  const path = points.map((p) => `${p.lng},${p.lat}`).join(";");
-  const url = `${OSRM}${path}?overview=full&geometries=geojson`;
+async function fetchLeg(a, b) {
+  const url = `${OSRM}${a.lng},${a.lat};${b.lng},${b.lat}?overview=full&geometries=geojson&exclude=ferry`;
   const res = await fetch(url);
   if (!res.ok) throw new Error("router");
   const data = await res.json();
@@ -207,43 +322,28 @@ async function fetchRoute(points) {
   return data.routes[0].geometry.coordinates.map(([lng, lat]) => ({ lat, lng }));
 }
 
-function drawRoute(line, color, weight) {
-  return L.polyline(
-    line.map((p) => [p.lat, p.lng]),
-    { color, weight, opacity: 0.92, lineJoin: "round" }
-  ).addTo(map);
-}
-
-function splitPlaces(line) {
-  const near = [];
-  const far = [];
-  for (const place of places) {
-    const { distance, along } = distanceToLine(
-      { lat: place.lat, lng: place.lng },
-      line
-    );
-    if (distance <= CORRIDOR_M) {
-      near.push({ ...place, distance, along, verdict: "pending" });
-    } else {
-      far.push(place);
-    }
+async function stitch(points) {
+  if (points.length < 2) return [];
+  const merged = [];
+  for (let i = 0; i < points.length - 1; i++) {
+    const leg = await fetchLeg(points[i], points[i + 1]);
+    if (lineLeavesZone(leg)) throw new Error("off-island");
+    if (i === 0) merged.push(...leg);
+    else merged.push(...leg.slice(1));
   }
-  near.sort((a, b) => a.along - b.along);
-  return { near, far };
+  return merged;
 }
 
-function drawHiddenDots() {
-  dotLayer.clearLayers();
-  hiddenDots.forEach((place) => placeDot(place).addTo(dotLayer));
-}
-
-function drawCandidatePins() {
-  pinLayer.clearLayers();
-  candidates.forEach((place) => {
-    if (place.verdict === "no") return;
-    const selected = place.verdict === "yes";
-    placePin(place, selected).addTo(pinLayer);
-  });
+function drawStreet(line, color) {
+  if (streetLayer) {
+    map.removeLayer(streetLayer);
+    streetLayer = null;
+  }
+  if (!line || line.length < 2) return;
+  streetLayer = L.polyline(
+    line.map((p) => [p.lat, p.lng]),
+    { color, weight: 5, opacity: 0.9, lineJoin: "round", interactive: false }
+  ).addTo(map);
 }
 
 function pending() {
@@ -258,16 +358,69 @@ function currentCard() {
   return pending()[0] || null;
 }
 
-function updateYesButton() {
-  const atCap = yeses().length >= MAX_YES;
-  els.btnYes.disabled = atCap;
-  els.btnYes.textContent = atCap ? "Cap reached" : "Yes — stop here";
+function rebuildCandidates() {
+  if (!streetLine || streetLine.length < 2) return;
+  const skip = snappedIds();
+  const prev = new Map(candidates.map((c) => [c.id, c.verdict]));
+  const near = [];
+  places.forEach((place) => {
+    if (skip.has(place.id)) return;
+    const { distance, along } = distanceToLine(place, streetLine);
+    if (distance <= CORRIDOR_M) {
+      near.push({
+        ...place,
+        distance,
+        along,
+        verdict: prev.get(place.id) || "pending",
+      });
+    }
+  });
+  near.sort((a, b) => a.along - b.along);
+  candidates = near;
+}
+
+function drawReviewPins() {
+  pinLayer.clearLayers();
+  const current = currentCard();
+  candidates.forEach((place) => {
+    if (place.verdict === "no") return;
+    if (current && place.id === current.id) {
+      L.marker([place.lat, place.lng], { icon: activeIcon(), interactive: false }).addTo(pinLayer);
+      L.marker([place.lat, place.lng], {
+        icon: L.divIcon({
+          className: "",
+          html: `<div class="wp-name">${place.name}</div>`,
+          iconSize: [0, 0],
+          iconAnchor: [0, 18],
+        }),
+        interactive: false,
+      }).addTo(pinLayer);
+    } else if (place.verdict === "yes") {
+      L.circleMarker([place.lat, place.lng], {
+        radius: 8,
+        color: "#f3efe6",
+        weight: 2,
+        fillColor: "#2f5d4e",
+        fillOpacity: 1,
+        interactive: false,
+      }).addTo(pinLayer);
+    } else {
+      L.circleMarker([place.lat, place.lng], {
+        radius: 7,
+        color: "#f3efe6",
+        weight: 2,
+        fillColor: "#c45c26",
+        fillOpacity: 1,
+        interactive: false,
+      }).addTo(pinLayer);
+    }
+  });
 }
 
 function openCard() {
   const place = currentCard();
   if (!place) {
-    finishReview();
+    if (phase !== "done") finishReview();
     return;
   }
   phase = "review";
@@ -276,23 +429,32 @@ function openCard() {
   els.sheet.hidden = false;
   const left = pending().length;
   const total = candidates.length;
-  const answered = total - left;
-  els.sheetCount.textContent = `${answered + 1} of ${total}`;
-  els.sheetYes.textContent = `${yeses().length} / ${MAX_YES} stops`;
+  els.sheetCount.textContent = `${total - left + 1} of ${total}`;
+  els.sheetYes.textContent = `${yeses().length} extra stop${yeses().length === 1 ? "" : "s"}`;
   els.placeName.textContent = place.name;
   els.placeBucket.textContent = place.category;
   els.placeLiner.textContent = place.one_liner;
   els.placeLink.href = place.source_url;
   els.btnUndo.hidden = rejectedStack.length === 0;
-  updateYesButton();
-  drawCandidatePins();
+  if (USE_CAP && yeses().length >= MAX_YES) {
+    els.btnYes.disabled = true;
+    els.btnYes.textContent = "Cap reached";
+  } else {
+    els.btnYes.disabled = false;
+    els.btnYes.textContent = "Yes — stop here";
+  }
+  drawReviewPins();
+  const sheetH = els.sheet.getBoundingClientRect().height || 220;
   map.panTo([place.lat, place.lng], { animate: true });
+  setTimeout(() => {
+    map.panBy([0, sheetH / 2 - 40], { animate: true });
+  }, 220);
 }
 
 function decide(verdict) {
   const place = currentCard();
   if (!place) return;
-  if (verdict === "yes" && yeses().length >= MAX_YES) return;
+  if (verdict === "yes" && USE_CAP && yeses().length >= MAX_YES) return;
   place.verdict = verdict;
   if (verdict === "no") rejectedStack.push(place.id);
   openCard();
@@ -313,29 +475,42 @@ async function finishReview() {
   phase = "done";
   els.sheet.hidden = true;
   hideHint();
-
   pinLayer.clearLayers();
-  const stops = yeses();
+
+  const extra = yeses();
+  const have = snappedIds();
+  extra.forEach((p) => {
+    if (have.has(p.id)) return;
+    waypoints.push({ lat: p.lat, lng: p.lng, place: p, id: "yes-" + p.id });
+  });
+  sortWaypoints();
+  drawHandles();
+  drawRubber();
+  drawCatalog();
 
   try {
-    const pts = [start, ...stops.map((s) => ({ lat: s.lat, lng: s.lng })), end];
-    const line = pts.length === 2 ? originalLine : await fetchRoute(pts);
-    if (finalLine) map.removeLayer(finalLine);
-    if (routeLine) map.removeLayer(routeLine);
-    routeLine = null;
-    finalLine = drawRoute(line, "#2f5d4e", 5);
-    map.fitBounds(finalLine.getBounds(), { padding: [50, 160] });
+    streetLine = await stitch(controlPoints());
+    drawStreet(streetLine, "#2f5d4e");
+    if (streetLayer) map.fitBounds(streetLayer.getBounds(), { padding: [50, 160] });
   } catch (err) {
-    toast("Could not rebuild the walk. Showing your original route.");
+    toast("Could not rebuild a Manhattan-only walk. Move a handle and try Done again.");
   }
 
-  stops.forEach((place, i) => {
-    L.marker([place.lat, place.lng], { icon: markerIcon("num", String(i + 1)), interactive: false }).addTo(pinLayer);
+  const named = [
+    ...waypoints.filter((wp) => wp.place).map((wp) => wp.place),
+  ];
+  const seen = new Set();
+  const stops = [];
+  named.forEach((p) => {
+    if (!seen.has(p.id)) {
+      seen.add(p.id);
+      stops.push(p);
+    }
   });
 
   els.summary.hidden = false;
   if (stops.length === 0) {
-    els.summaryBody.innerHTML = `<p class="empty">No stops. You still have the walk from A to B.</p>`;
+    els.summaryBody.innerHTML = `<p class="empty">No named stops. You still have the street walk from A to B.</p>`;
   } else {
     els.summaryBody.innerHTML = `<ol>${stops
       .map((s) => `<li><strong>${s.name}</strong> — ${s.one_liner}</li>`)
@@ -343,38 +518,85 @@ async function finishReview() {
   }
 }
 
-async function buildWalk() {
-  phase = "routing";
-  showHint("Drawing the walk", "Finding a street route, then only the places within 150 meters.");
+async function restitchAndCards() {
+  if (!start || !end) return;
+  sortWaypoints();
+  drawRubber();
+  drawHandles();
+  drawCatalog();
   try {
-    const line = await fetchRoute([start, end]);
-    originalLine = line;
-    if (routeLine) map.removeLayer(routeLine);
-    routeLine = drawRoute(line, "#c45c26", 5);
-    map.fitBounds(routeLine.getBounds(), { padding: [40, 140] });
-
-    const split = splitPlaces(line);
-    candidates = split.near;
-    hiddenDots = split.far;
-    drawHiddenDots();
-
+    streetLine = await stitch(controlPoints());
+    drawStreet(streetLine, "#c45c26");
+    rebuildCandidates();
     if (candidates.length === 0) {
-      phase = "done";
-      hideHint();
-      els.summary.hidden = false;
-      els.summaryBody.innerHTML = `<p class="empty">Nothing in the 150 m corridor. The walk is still on the map. Clear and try a longer line through FiDi.</p>`;
+      els.sheet.hidden = true;
+      showHint("Pull the line", "No extra Atlas Obscura stops within 150 m. Drag the orange line onto a block you want, or tap Done.");
       return;
     }
-    openCard();
+    if (phase !== "done") openCard();
   } catch (err) {
-    phase = "end";
-    showHint("Route failed", "The free walking server did not answer. Tap Clear and try once more.");
-    toast("Walking router is busy. Try again.");
+    if (err.message === "off-island") {
+      toast("That pull left Manhattan. Handle snapped back.");
+    } else {
+      toast("Walking router is busy. Try the pull again.");
+    }
   }
 }
 
+function scheduleRestitch() {
+  clearTimeout(restitchTimer);
+  restitchTimer = setTimeout(restitchAndCards, 80);
+}
+
+function finishWaypointMove(wp, pt) {
+  if (!inZone(pt.lat, pt.lng)) {
+    toast("Stay south of Chambers, on Manhattan.");
+    removeWaypoint(wp);
+    return;
+  }
+  const place = nearestPlace(pt);
+  if (place) {
+    wp.lat = place.lat;
+    wp.lng = place.lng;
+    wp.place = place;
+  } else {
+    wp.lat = pt.lat;
+    wp.lng = pt.lng;
+    wp.place = null;
+  }
+  scheduleRestitch();
+}
+
+function addWaypointAt(pt, afterIndex) {
+  const place = nearestPlace(pt);
+  const wp = place
+    ? { lat: place.lat, lng: place.lng, place, id: "wp-" + Date.now() }
+    : { lat: pt.lat, lng: pt.lng, place: null, id: "wp-" + Date.now() };
+  waypoints.push(wp);
+  sortWaypoints();
+  scheduleRestitch();
+}
+
+function removeWaypoint(wp) {
+  waypoints = waypoints.filter((w) => w.id !== wp.id);
+  scheduleRestitch();
+}
+
+function onGrabLine(e) {
+  if (phase === "done" || phase === "idle" || !start || !end) return;
+  L.DomEvent.stop(e);
+  const pt = { lat: e.latlng.lat, lng: e.latlng.lng };
+  if (!inZone(pt.lat, pt.lng)) {
+    toast("Stay south of Chambers, on Manhattan.");
+    return;
+  }
+  addWaypointAt(pt);
+}
+
 function onMapTap(e) {
-  if (phase === "review" || phase === "done" || phase === "routing") return;
+  if (dragging) return;
+  if (phase === "done") return;
+  if (phase === "review" || phase === "shaping") return;
   const { lat, lng } = e.latlng;
   if (!inZone(lat, lng)) {
     toast("MVP only works south of Chambers Street, on Manhattan.");
@@ -382,7 +604,20 @@ function onMapTap(e) {
   }
   if (!start) {
     start = { lat, lng };
-    startMarker = L.marker([lat, lng], { icon: markerIcon("start"), interactive: false }).addTo(map);
+    startMarker = L.marker([lat, lng], {
+      icon: abIcon("A", "#2f5d4e"),
+      draggable: true,
+    }).addTo(map);
+    startMarker.on("dragend", (ev) => {
+      const ll = ev.target.getLatLng();
+      if (!inZone(ll.lat, ll.lng)) {
+        toast("Start must stay in the wash.");
+        startMarker.setLatLng([start.lat, start.lng]);
+        return;
+      }
+      start = { lat: ll.lat, lng: ll.lng };
+      if (end) scheduleRestitch();
+    });
     els.btnClear.hidden = false;
     phase = "end";
     showHint("Start is set", "Tap your end point.");
@@ -395,9 +630,49 @@ function onMapTap(e) {
       end = null;
       return;
     }
-    endMarker = L.marker([lat, lng], { icon: markerIcon("end"), interactive: false }).addTo(map);
-    buildWalk();
+    endMarker = L.marker([lat, lng], {
+      icon: abIcon("B", "#1c1b18"),
+      draggable: true,
+    }).addTo(map);
+    endMarker.on("dragend", (ev) => {
+      const ll = ev.target.getLatLng();
+      if (!inZone(ll.lat, ll.lng)) {
+        toast("End must stay in the wash.");
+        endMarker.setLatLng([end.lat, end.lng]);
+        return;
+      }
+      end = { lat: ll.lat, lng: ll.lng };
+      scheduleRestitch();
+    });
+    phase = "shaping";
+    showHint("Pull the line", "Drag the orange line onto a spot or a street. Tap a handle to remove it.");
+    drawRubber();
+    scheduleRestitch();
   }
+}
+
+function clearAll() {
+  start = null;
+  end = null;
+  waypoints = [];
+  streetLine = null;
+  candidates = [];
+  rejectedStack = [];
+  phase = "idle";
+  dragging = false;
+  if (startMarker) map.removeLayer(startMarker);
+  if (endMarker) map.removeLayer(endMarker);
+  if (rubberLine) map.removeLayer(rubberLine);
+  if (grabLine) map.removeLayer(grabLine);
+  if (streetLayer) map.removeLayer(streetLayer);
+  startMarker = endMarker = rubberLine = grabLine = streetLayer = null;
+  handleLayer.clearLayers();
+  pinLayer.clearLayers();
+  drawCatalog();
+  els.sheet.hidden = true;
+  els.summary.hidden = true;
+  els.btnClear.hidden = true;
+  showHint("Tap the map", "First tap is start. Second tap is end. Then pull the line through the blocks you want.");
 }
 
 async function init() {
@@ -412,25 +687,22 @@ async function init() {
   }).addTo(map);
 
   L.control.zoom({ position: "bottomright" }).addTo(map);
+  catalogLayer.addTo(map);
   pinLayer.addTo(map);
-  dotLayer.addTo(map);
+  handleLayer.addTo(map);
 
-  const bounds = L.latLngBounds(
-    [ZONE.south, ZONE.west],
-    [ZONE.north, ZONE.east]
-  );
-  L.rectangle(bounds, {
-    color: "#1c1b18",
-    weight: 1,
-    dashArray: "4 6",
-    fill: false,
-    opacity: 0.25,
+  L.polygon(ZONE_POLY, {
+    color: "transparent",
+    weight: 0,
+    fillColor: "#2f5d4e",
+    fillOpacity: 0.16,
     interactive: false,
   }).addTo(map);
 
   const res = await fetch("places.json");
   const data = await res.json();
   places = data.places.filter((p) => inZone(p.lat, p.lng));
+  drawCatalog();
 
   map.on("click", onMapTap);
   els.btnClear.addEventListener("click", clearAll);

@@ -1,36 +1,15 @@
 # Corridor — Lower Manhattan walk MVP
 
-Personal, free, phone-first. No accounts. No paid APIs.
+## On the phone
 
-## What it does
+1. All in-zone spots are visible (no names yet).
+2. Tap start, tap end. A straight orange line appears, plus a street preview.
+3. Tap / pull the fat orange line onto a spot or a street. Snap = named waypoint. Street = plain handle.
+4. Mid-points are sorted so the walk does not backtrack.
+5. Extra Atlas Obscura places within 150 m of the *street* walk become Yes/No cards. Already-snapped places skip the stack.
+6. Done rebuilds the street walk through waypoints + Yes stops.
 
-1. Empty map of Lower Manhattan (south of Chambers).
-2. Tap start, tap end. Both must be inside the box.
-3. Draws a walking route on real streets (free OSRM).
-4. Places within 150 m become full pins + a Yes/No card stack, in walking order.
-5. Other in-zone Atlas Obscura places shrink to tiny dots. Not tappable.
-6. After the stack (or Done early), the walk rebuilds through up to 5 Yes stops. No new pins.
+## Update GitHub Pages
 
-## Test on iPhone (free)
-
-The files cannot live only on this computer. Put the whole `corridor-app` folder on any free static host, then open the URL in Safari.
-
-Fast options:
-
-- Drop the folder on [GitHub Pages](https://pages.github.com/) (free account).
-- Publish via Grok Build and open the `grok.me` link.
-- On the same Wi-Fi as a laptop: `python3 -m http.server 8000` inside this folder, then visit `http://YOUR-LAPTOP-IP:8000` on the phone.
-
-Then: Safari → Share → **Add to Home Screen**.
-
-Needs cellular or Wi-Fi. Map tiles and the walking router are on the public internet.
-
-## Files
-
-- `index.html` `styles.css` `app.js` — the app
-- `places.json` — 23 walkable Atlas Obscura stops
-- `manifest.json` `icon.svg` — home-screen extras
-
-## Costs
-
-$0. OpenStreetMap + CARTO tiles, public OSRM foot router, your JSON. If OSRM is busy, Clear and try again. Do not add a Google key.
+Replace `app.js`, `styles.css`, and `index.html` in the repo root (keep `places.json`).
+Wait a minute, hard-refresh Safari.

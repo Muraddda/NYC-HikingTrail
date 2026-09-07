@@ -6,7 +6,6 @@
   --line: #d4cdbf;
   --route: #c45c26;
   --start: #2f5d4e;
-  --end: #1c1b18;
   --yes: #2f5d4e;
   --no: #8a3b2a;
   --dot: #8a8478;
@@ -31,7 +30,7 @@ html, body {
   z-index: 0;
 }
 
-.leaflet-container { background: #ddd6c8; font-family: inherit; }
+.leaflet-container { background: #d8d2c6; font-family: inherit; }
 .leaflet-control-attribution {
   font-size: 10px;
   background: rgba(243, 239, 230, 0.85);
@@ -50,9 +49,7 @@ html, body {
   pointer-events: none;
 }
 
-.brand, .ghost-btn {
-  pointer-events: auto;
-}
+.brand, .ghost-btn { pointer-events: auto; }
 
 .brand {
   background: rgba(243, 239, 230, 0.92);
@@ -137,7 +134,7 @@ html, body {
   border-top: 1px solid var(--line);
   padding: 16px 16px calc(16px + var(--safe-bot));
   box-shadow: 0 -8px 30px rgba(28, 27, 24, 0.12);
-  max-height: 52%;
+  max-height: 48%;
 }
 
 .sheet[hidden] { display: none; }
@@ -191,8 +188,6 @@ html, body {
   gap: 8px;
 }
 
-.actions.triple { grid-template-columns: 1fr 1fr 1fr; }
-
 .btn {
   border: 1px solid var(--ink);
   background: var(--ink);
@@ -207,9 +202,7 @@ html, body {
   color: var(--ink);
 }
 
-.btn:disabled {
-  opacity: 0.35;
-}
+.btn:disabled { opacity: 0.35; }
 
 .undo-row {
   margin-top: 10px;
@@ -257,25 +250,46 @@ html, body {
 }
 
 .summary li + li { margin-top: 6px; }
-
-.summary .empty {
-  color: var(--ink-soft);
-  font-size: 15px;
-}
+.summary .empty { color: var(--ink-soft); font-size: 15px; }
 
 .pin-label {
   background: var(--ink);
   color: var(--paper);
   font-size: 11px;
   font-weight: 600;
-  width: 22px;
+  min-width: 22px;
   height: 22px;
-  border-radius: 50%;
+  padding: 0 6px;
+  border-radius: 11px;
   display: flex;
   align-items: center;
   justify-content: center;
   border: 2px solid var(--paper);
   box-shadow: 0 2px 6px rgba(0,0,0,.25);
+  white-space: nowrap;
+}
+
+.wp-name {
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 11px;
+  line-height: 1.2;
+  padding: 4px 7px;
+  border-radius: 2px;
+  box-shadow: 0 2px 6px rgba(0,0,0,.2);
+  white-space: nowrap;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.active-ring {
+  width: 28px;
+  height: 28px;
+  border: 3px solid #c45c26;
+  border-radius: 50%;
+  background: rgba(196, 92, 38, 0.2);
+  box-shadow: 0 0 0 6px rgba(196, 92, 38, 0.12);
 }
 
 .leaflet-div-icon { background: none; border: none; }
