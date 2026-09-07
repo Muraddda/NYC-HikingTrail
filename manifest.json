@@ -1,0 +1,17 @@
+{
+  "name": "Corridor",
+  "short_name": "Corridor",
+  "description": "Walk Lower Manhattan. Only the stops on your route.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f3efe6",
+  "theme_color": "#1c1b18",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

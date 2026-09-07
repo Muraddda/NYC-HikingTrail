@@ -1,0 +1,266 @@
+{
+  "zone": {
+    "name": "Lower Manhattan south of Chambers Street",
+    "north": "Chambers Street",
+    "south": "The Battery",
+    "west": "Hudson River",
+    "east": "East River",
+    "north_lat": 40.7155,
+    "notes": "MVP coverage only. Places north of Chambers, in Brooklyn, or not street-accessible are omitted."
+  },
+  "places": [
+    {
+      "id": "irish-hunger-memorial",
+      "name": "Irish Hunger Memorial",
+      "lat": 40.7152,
+      "lng": -74.0164,
+      "neighborhood": "Battery Park City",
+      "category": "art",
+      "one_liner": "A County Mayo stone cottage and a quarter-acre of Irish hillside stacked above Vesey Street.",
+      "source_url": "https://www.atlasobscura.com/places/irish-hunger-memorial",
+      "ao_tags": ["art", "memorials", "history"]
+    },
+    {
+      "id": "woolworth-building",
+      "name": "Woolworth Building",
+      "lat": 40.7125,
+      "lng": -74.0083,
+      "neighborhood": "Civic Center",
+      "category": "oddity",
+      "one_liner": "The old Cathedral of Commerce still pins the skyline; the lobby is tour-only, the facade is free.",
+      "source_url": "https://www.atlasobscura.com/places/the-woolworth-building-new-york-new-york",
+      "ao_tags": ["architecture", "architectural oddities"]
+    },
+    {
+      "id": "5-beekman-street",
+      "name": "5 Beekman Street",
+      "lat": 40.7114,
+      "lng": -74.0067,
+      "neighborhood": "Civic Center",
+      "category": "oddity",
+      "one_liner": "Temple Court sat empty for decades; the nine-story iron atrium is now a hotel you can still gawk at from Beekman.",
+      "source_url": "https://www.atlasobscura.com/places/5-beekman-street",
+      "ao_tags": ["architecture", "architectural oddities"]
+    },
+    {
+      "id": "barthman-sidewalk-clock",
+      "name": "Barthman's Sidewalk Clock",
+      "lat": 40.7098,
+      "lng": -74.0095,
+      "neighborhood": "Financial District",
+      "category": "oddity",
+      "one_liner": "A working clock face set into the Broadway sidewalk at Maiden Lane. Look down.",
+      "source_url": "https://www.atlasobscura.com/places/barthman-s-sidewalk-clock",
+      "ao_tags": ["architectural oddities", "hidden"]
+    },
+    {
+      "id": "trinity-place-bank-vault-bar",
+      "name": "Trinity Place Bank Vault Bar",
+      "lat": 40.7089,
+      "lng": -74.0113,
+      "neighborhood": "Financial District",
+      "category": "bar",
+      "one_liner": "Cocktails inside a 1904 Mosler vault whose doors weigh 35 tons each, under 115 Broadway.",
+      "source_url": "https://www.atlasobscura.com/places/trinity-place-bank-vault-bar",
+      "ao_tags": ["bars", "unique restaurants & bars"]
+    },
+    {
+      "id": "trinity-churchyard",
+      "name": "Trinity Churchyard",
+      "lat": 40.7083,
+      "lng": -74.0122,
+      "neighborhood": "Financial District",
+      "category": "history",
+      "one_liner": "Manhattan's oldest carved gravestone, a pigpen cipher, and Hamilton, boxed in by towers.",
+      "source_url": "https://www.atlasobscura.com/places/trinity-churchyard",
+      "ao_tags": ["sacred spaces", "history", "cemeteries"]
+    },
+    {
+      "id": "st-georges-syrian-catholic-church",
+      "name": "St. George's Syrian Catholic Church",
+      "lat": 40.7084,
+      "lng": -74.0142,
+      "neighborhood": "Financial District",
+      "category": "history",
+      "one_liner": "A boarded landmark on Washington Street, leftover from the Syrian colony razed for the Battery Tunnel.",
+      "source_url": "https://www.atlasobscura.com/places/st-georges-syrian-catholic-church",
+      "ao_tags": ["sacred spaces", "history", "architecture"]
+    },
+    {
+      "id": "titanic-memorial-lighthouse",
+      "name": "Titanic Memorial Lighthouse",
+      "lat": 40.7073,
+      "lng": -74.0037,
+      "neighborhood": "South Street Seaport",
+      "category": "history",
+      "one_liner": "Molly Brown pushed for this lighthouse; it now marks the Seaport instead of dropping a noon time ball.",
+      "source_url": "https://www.atlasobscura.com/places/titanic-memorial",
+      "ao_tags": ["memorials", "history", "monuments"]
+    },
+    {
+      "id": "wall-street-palisade",
+      "name": "Wall Street Palisade",
+      "lat": 40.7069,
+      "lng": -74.0095,
+      "neighborhood": "Financial District",
+      "category": "history",
+      "one_liner": "Wooden pavers in the cobbles trace the 1653 wall that named the street.",
+      "source_url": "https://www.atlasobscura.com/places/wall-street-palisade",
+      "ao_tags": ["history", "hidden"]
+    },
+    {
+      "id": "wall-street-bombing-scars",
+      "name": "Wall Street Bombing Scars",
+      "lat": 40.7068,
+      "lng": -74.0105,
+      "neighborhood": "Financial District",
+      "category": "history",
+      "one_liner": "Pockmarks still pitted into 23 Wall Street from the 1920 wagon bomb that killed 38 people.",
+      "source_url": "https://www.atlasobscura.com/places/wall-street-bombing",
+      "ao_tags": ["history", "hidden"]
+    },
+    {
+      "id": "slave-market-site",
+      "name": "Site of New York Slave Market",
+      "lat": 40.7058,
+      "lng": -74.0078,
+      "neighborhood": "Financial District",
+      "category": "history",
+      "one_liner": "A small plaque near 74 Wall Street marks where the city ran a municipal slave market.",
+      "source_url": "https://www.atlasobscura.com/places/site-of-new-york-slave-market",
+      "ao_tags": ["history", "memorials"]
+    },
+    {
+      "id": "standard-oil-building",
+      "name": "Standard Oil Building",
+      "lat": 40.7056,
+      "lng": -74.0133,
+      "neighborhood": "Bowling Green",
+      "category": "oddity",
+      "one_liner": "Rockefeller's old HQ bends with Broadway and still wears a pyramid meant to greet incoming ships.",
+      "source_url": "https://www.atlasobscura.com/places/the-standard-oil-building-new-york-new-york",
+      "ao_tags": ["architecture", "history"]
+    },
+    {
+      "id": "skyscraper-museum",
+      "name": "Skyscraper Museum",
+      "lat": 40.7055,
+      "lng": -74.0175,
+      "neighborhood": "Battery Park City",
+      "category": "art",
+      "one_liner": "A 10-foot-high gallery at 39 Battery Place that makes Lower Manhattan's towers feel like models.",
+      "source_url": "https://www.atlasobscura.com/places/skyscraper-museum",
+      "ao_tags": ["museums", "architecture"]
+    },
+    {
+      "id": "wavertree",
+      "name": "Wavertree",
+      "lat": 40.7055,
+      "lng": -74.0026,
+      "neighborhood": "South Street Seaport",
+      "category": "history",
+      "one_liner": "An 1885 iron-hulled full-rigger parked at Pier 16, one of the last of her kind still afloat.",
+      "source_url": "https://www.atlasobscura.com/places/wavertree-south-street-seaport",
+      "ao_tags": ["history", "museums"]
+    },
+    {
+      "id": "delmonicos",
+      "name": "Delmonico's",
+      "lat": 40.7051,
+      "lng": -74.0101,
+      "neighborhood": "Financial District",
+      "category": "food",
+      "one_liner": "The Beaver Street original; two marble columns out front are rumored to have come from Pompeii.",
+      "source_url": "https://www.atlasobscura.com/places/delmonicos-restaurant",
+      "ao_tags": ["restaurants", "history", "architectural oddities"]
+    },
+    {
+      "id": "oldest-fence-in-new-york",
+      "name": "Oldest Fence in New York",
+      "lat": 40.7049,
+      "lng": -74.0137,
+      "neighborhood": "Bowling Green",
+      "category": "history",
+      "one_liner": "The 1771 Bowling Green fence that once guarded a statue of King George — sawed-off crowns still show.",
+      "source_url": "https://www.atlasobscura.com/places/the-oldest-fence-in-new-york-new-york-new-york",
+      "ao_tags": ["history", "hidden", "monuments"]
+    },
+    {
+      "id": "braemar-stone",
+      "name": "September 11th Garden Braemar Stone",
+      "lat": 40.7046,
+      "lng": -74.0092,
+      "neighborhood": "Hanover Square",
+      "category": "art",
+      "one_liner": "A river stone from near Balmoral sitting in the Queen Elizabeth II garden off Hanover Square.",
+      "source_url": "https://www.atlasobscura.com/places/queen-elizabeth-ii-september-11th-garden-braemar-stone",
+      "ao_tags": ["memorials", "art"]
+    },
+    {
+      "id": "77-water-street",
+      "name": "77 Water Street",
+      "lat": 40.7044,
+      "lng": -74.0082,
+      "neighborhood": "Financial District",
+      "category": "oddity",
+      "one_liner": "Street-level oddities plus a fake WWI biplane parked on the roof like it just landed.",
+      "source_url": "https://www.atlasobscura.com/places/77-water-street",
+      "ao_tags": ["architectural oddities", "art"]
+    },
+    {
+      "id": "stadt-huys-remnants",
+      "name": "Preserved Remnants of 17th Century New York",
+      "lat": 40.7039,
+      "lng": -74.0111,
+      "neighborhood": "Financial District",
+      "category": "history",
+      "one_liner": "Dutch Stadt Huys and Lovelace Tavern foundations under glass in the sidewalk at 85 Broad Street.",
+      "source_url": "https://www.atlasobscura.com/places/preserved-remnants-of-17th-century-new-york",
+      "ao_tags": ["history", "hidden", "architectural oddities"]
+    },
+    {
+      "id": "merchant-mariners-memorial",
+      "name": "American Merchant Mariners' Memorial",
+      "lat": 40.7039,
+      "lng": -74.0179,
+      "neighborhood": "Battery Park",
+      "category": "art",
+      "one_liner": "Bronze sailors on a sinking prow; the man in the water disappears under the tide twice a day.",
+      "source_url": "https://www.atlasobscura.com/places/the-american-merchant-mariner-s-memorial-new-york-new-york",
+      "ao_tags": ["sculptures", "memorials", "art"]
+    },
+    {
+      "id": "elevated-acre",
+      "name": "The Elevated Acre",
+      "lat": 40.7032,
+      "lng": -74.0090,
+      "neighborhood": "Financial District",
+      "category": "oddity",
+      "one_liner": "A lawn and river view hiding up an escalator at 55 Water Street.",
+      "source_url": "https://www.atlasobscura.com/places/the-elevated-acre-new-york-new-york",
+      "ao_tags": ["hidden", "architectural oddities"]
+    },
+    {
+      "id": "fraunces-tavern",
+      "name": "Fraunces Tavern",
+      "lat": 40.7034,
+      "lng": -74.0114,
+      "neighborhood": "Financial District",
+      "category": "bar",
+      "one_liner": "Washington's farewell dinner site, still a tavern and a small museum at Pearl and Broad.",
+      "source_url": "https://www.atlasobscura.com/places/fraunces-tavern",
+      "ao_tags": ["bars", "history", "restaurants"]
+    },
+    {
+      "id": "seaglass-carousel",
+      "name": "SeaGlass Carousel",
+      "lat": 40.7022,
+      "lng": -74.0144,
+      "neighborhood": "Battery Park",
+      "category": "art",
+      "one_liner": "Glowing fish spinning inside a glass nautilus on the old New York Aquarium footprint.",
+      "source_url": "https://www.atlasobscura.com/places/the-seaglass-carousel-new-york-new-york",
+      "ao_tags": ["art", "architectural oddities"]
+    }
+  ]
+}
