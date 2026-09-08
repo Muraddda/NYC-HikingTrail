@@ -40,6 +40,49 @@ html, body { height: 100%; background: var(--paper); color: var(--ink); font-fam
 .sheet { left: 0; right: 0; bottom: 0; background: var(--paper); border-top: 1px solid var(--line); padding: 16px 16px calc(16px + var(--safe-bot)); max-height: 48%; }
 .sheet-meta { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); }
 .sheet h2 { font-family: "Fraunces", Georgia, serif; font-size: 24px; font-weight: 500; letter-spacing: -0.03em; }
+.leaflet-popup.spot-popup .leaflet-popup-content-wrapper {
+  background: #f3efe6;
+  color: #1c1b18;
+  border-radius: 0;
+  box-shadow: 0 12px 40px rgba(28, 27, 24, 0.22);
+  padding: 0;
+}
+.leaflet-popup.spot-popup .leaflet-popup-content {
+  margin: 0;
+  width: 188px !important;
+}
+.leaflet-popup.spot-popup .leaflet-popup-tip {
+  background: #f3efe6;
+}
+.spot-pop { width: 188px; }
+.spot-pop img {
+  display: block;
+  width: 188px;
+  height: 188px;
+  object-fit: contain;
+  background: #1c1b18;
+}
+.spot-pop-name {
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  padding: 10px 10px 6px;
+  line-height: 1.25;
+}
+.spot-pop-acts {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 10px 10px;
+}
+.emoji-btn {
+  border: 1px solid #d4cdbf;
+  background: #fff;
+  width: 80px;
+  height: 44px;
+  font-size: 22px;
+  line-height: 1;
+}
 .bucket { display: inline-block; margin: 8px 0 10px; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; border: 1px solid var(--ink); padding: 3px 8px; }
 .liner { font-size: 15px; line-height: 1.45; color: var(--ink-soft); margin-bottom: 12px; }
 .ao-link { display: inline-block; color: var(--ink); font-size: 13px; margin-bottom: 16px; }
