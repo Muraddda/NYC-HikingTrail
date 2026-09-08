@@ -57,8 +57,12 @@ let plannedStops = [];
 let reviewPopup = null;
 let flyToken = 0;
 let reviewFirst = true;
+let adoptRestore = null;
+let focusPlaceId = null;
+let reviewCurrentId = null;
 let phase = "idle";
 let dragging = false;
+let pullingWp = null;
 let toastTimer = null;
 
 function pointInPoly(lat, lng, poly) {
@@ -137,26 +141,111 @@ function nearestOnLine(point, line) {
   }
   return { point: best, distance: bestD };
 }
-function thinVias(stops) {
-  if (stops.length <= 2) return stops;
-  const last = stops[stops.length - 1];
-  const kept = [stops[0]];
-  for (let i = 1; i < stops.length - 1; i++) {
-    const { distance } = distanceToLine(entranceOf(stops[i]), [entranceOf(kept[kept.length - 1]), entranceOf(last)]);
-    if (distance > 90) kept.push(stops[i]);
+function insertStop(stops, place) {
+  if (!stops.length) return [place];
+  if (stops.some((s) => s.id === place.id)) return stops.slice();
+  const door = entranceOf(place);
+  let bestAt = stops.length;
+  let bestCost = haversine(entranceOf(stops[stops.length - 1]), door);
+  const head = haversine(door, entranceOf(stops[0]));
+  if (head < bestCost) {
+    bestCost = head;
+    bestAt = 0;
   }
-  kept.push(last);
-  if (kept.length > 4) {
-    const tighter = [kept[0]];
-    const fin = kept[kept.length - 1];
-    for (let i = 1; i < kept.length - 1; i++) {
-      const { distance } = distanceToLine(entranceOf(kept[i]), [entranceOf(tighter[tighter.length - 1]), entranceOf(fin)]);
-      if (distance > 140) tighter.push(kept[i]);
+  for (let i = 0; i < stops.length - 1; i++) {
+    const a = entranceOf(stops[i]);
+    const b = entranceOf(stops[i + 1]);
+    const extra = haversine(a, door) + haversine(door, b) - haversine(a, b);
+    if (extra < bestCost) {
+      bestCost = extra;
+      bestAt = i + 1;
     }
-    tighter.push(fin);
-    return tighter;
   }
-  return kept;
+  const next = stops.slice();
+  next.splice(bestAt, 0, place);
+  return next;
+}
+function orderStops(stops) {
+  const list = stops.slice();
+  if (list.length <= 2) return list;
+  const origin = start || { lat: list[0].lat, lng: list[0].lng };
+  const dest = end || { lat: list[list.length - 1].lat, lng: list[list.length - 1].lng };
+  const unused = list.slice();
+  const ordered = [];
+  let cur = unused.reduce((best, p) => (
+    haversine(entranceOf(p), origin) < haversine(entranceOf(best), origin) ? p : best
+  ));
+  ordered.push(cur);
+  unused.splice(unused.indexOf(cur), 1);
+  while (unused.length) {
+    const last = ordered[ordered.length - 1];
+    const next = unused.reduce((best, p) => (
+      haversine(entranceOf(p), entranceOf(last)) < haversine(entranceOf(best), entranceOf(last)) ? p : best
+    ));
+    ordered.push(next);
+    unused.splice(unused.indexOf(next), 1);
+  }
+  const forward = haversine(entranceOf(ordered[0]), origin) + haversine(entranceOf(ordered[ordered.length - 1]), dest);
+  const backward = haversine(entranceOf(ordered[ordered.length - 1]), origin) + haversine(entranceOf(ordered[0]), dest);
+  if (backward < forward) ordered.reverse();
+  let improved = true;
+  let guard = 0;
+  while (improved && guard++ < 50) {
+    improved = false;
+    for (let i = 0; i < ordered.length - 2; i++) {
+      for (let j = i + 2; j < ordered.length; j++) {
+        const a = entranceOf(ordered[i]);
+        const b = entranceOf(ordered[i + 1]);
+        const c = entranceOf(ordered[j]);
+        const d = j + 1 < ordered.length ? entranceOf(ordered[j + 1]) : null;
+        const before = haversine(a, b) + (d ? haversine(c, d) : 0);
+        const after = haversine(a, c) + (d ? haversine(b, d) : 0);
+        if (after + 2 < before) {
+          const mid = ordered.slice(i + 1, j + 1).reverse();
+          ordered.splice(i + 1, j - i, ...mid);
+          improved = true;
+        }
+      }
+    }
+  }
+  return ordered;
+}
+function touchesStop(pts, from, to, stops) {
+  for (let i = from; i <= to; i++) {
+    for (const s of stops) {
+      if (haversine(pts[i], entranceOf(s)) < 22) return true;
+    }
+  }
+  return false;
+}
+function lineServesStops(line, stops) {
+  return stops.every((s) => nearestOnLine(entranceOf(s), line).distance < 45);
+}
+function stripLoops(line, stops) {
+  if (!line || line.length < 8) return line;
+  const pts = line.slice();
+  let changed = true;
+  let guard = 0;
+  while (changed && guard++ < 12) {
+    changed = false;
+    for (let i = 0; i < pts.length - 6; i++) {
+      for (let j = i + 6; j < pts.length; j++) {
+        const gap = haversine(pts[i], pts[j]);
+        if (gap > 22) continue;
+        let walked = 0;
+        for (let k = i; k < j; k++) walked += haversine(pts[k], pts[k + 1]);
+        if (walked < 220 || walked < gap * 8) continue;
+        if (touchesStop(pts, i + 1, j - 1, stops)) continue;
+        const trial = pts.slice(0, i + 1).concat(pts.slice(j));
+        if (!lineServesStops(trial, stops)) continue;
+        pts.splice(i + 1, j - i - 1);
+        changed = true;
+        break;
+      }
+      if (changed) break;
+    }
+  }
+  return lineServesStops(pts, stops) ? pts : line;
 }
 function hint(title, body) {
   els.hint.hidden = false;
@@ -214,51 +303,94 @@ function catColor(place) {
   return CAT_COLOR[place.category] || "#1c1b18";
 }
 
+function finishPull() {
+  if (!pullingWp) return;
+  const wp = pullingWp;
+  pullingWp = null;
+  dragging = false;
+  if (map.dragging) map.dragging.enable();
+  if (!inZone(wp.lat, wp.lng)) {
+    toast("Stay south of 23rd, on Manhattan.");
+    waypoints = waypoints.filter((w) => w.id !== wp.id);
+  } else {
+    const place = nearestPlace(wp);
+    if (place) {
+      wp.lat = place.lat;
+      wp.lng = place.lng;
+      wp.place = place;
+    }
+  }
+  refreshShape();
+}
+
 function drawRubber() {
   const latlngs = controlPoints().map((p) => [p.lat, p.lng]);
   if (rubberLine) rubberLine.setLatLngs(latlngs).setStyle({ opacity: 0.95 });
   else rubberLine = L.polyline(latlngs, { color: "#c45c26", weight: 4, opacity: 0.95, interactive: false }).addTo(map);
-  if (grabLine) grabLine.setLatLngs(latlngs).setStyle({ opacity: 0.001, interactive: true });
+  if (grabLine) grabLine.setLatLngs(latlngs).setStyle({ opacity: pullingWp ? 0 : 0.001, interactive: !pullingWp });
   else {
-    grabLine = L.polyline(latlngs, { color: "#c45c26", weight: 28, opacity: 0.001 }).addTo(map);
-    grabLine.on("click", (e) => {
-      if (phase === "done" || phase === "idle" || !start || !end) return;
+    grabLine = L.polyline(latlngs, { color: "#c45c26", weight: 36, opacity: 0.001 }).addTo(map);
+    grabLine.on("mousedown", (e) => {
+      if (phase === "done" || phase === "idle" || phase === "review" || !start || !end) return;
       L.DomEvent.stop(e);
+      if (e.originalEvent) L.DomEvent.preventDefault(e.originalEvent);
       const pt = { lat: e.latlng.lat, lng: e.latlng.lng };
       if (!inZone(pt.lat, pt.lng)) { toast("Stay south of 23rd, on Manhattan."); return; }
-      const place = nearestPlace(pt);
-      waypoints.push(place
-        ? { lat: place.lat, lng: place.lng, place, id: "wp-" + Date.now() }
-        : { lat: pt.lat, lng: pt.lng, place: null, id: "wp-" + Date.now() });
-      refreshShape();
+      pullingWp = { lat: pt.lat, lng: pt.lng, place: null, id: "wp-" + Date.now() };
+      waypoints.push(pullingWp);
+      dragging = true;
+      map.dragging.disable();
+      drawRubber();
     });
   }
 }
 function drawHandles() {
   handleLayer.clearLayers();
+  if (pullingWp) return;
   waypoints.forEach((wp) => {
-    const marker = L.marker([wp.lat, wp.lng], { icon: handleIcon(wp), draggable: true }).addTo(handleLayer);
-    marker.on("dragstart", () => { dragging = true; });
+    const marker = L.marker([wp.lat, wp.lng], {
+      icon: handleIcon(wp),
+      draggable: true,
+      autoPan: false,
+      zIndexOffset: 800,
+    }).addTo(handleLayer);
+    let moved = false;
+    marker.on("dragstart", () => {
+      dragging = true;
+      moved = false;
+      map.dragging.disable();
+      if (grabLine) grabLine.setStyle({ interactive: false });
+    });
     marker.on("drag", (e) => {
+      moved = true;
       const ll = e.target.getLatLng();
-      const place = nearestPlace({ lat: ll.lat, lng: ll.lng });
-      if (place) { wp.lat = place.lat; wp.lng = place.lng; wp.place = place; }
-      else { wp.lat = ll.lat; wp.lng = ll.lng; wp.place = null; }
-      e.target.setLatLng([wp.lat, wp.lng]);
-      e.target.setIcon(handleIcon(wp));
+      wp.lat = ll.lat;
+      wp.lng = ll.lng;
+      wp.place = null;
       drawRubber();
     });
     marker.on("dragend", () => {
       const ll = marker.getLatLng();
+      wp.lat = ll.lat;
+      wp.lng = ll.lng;
       if (!inZone(ll.lat, ll.lng)) {
         toast("Stay south of 23rd, on Manhattan.");
         waypoints = waypoints.filter((w) => w.id !== wp.id);
+      } else {
+        const place = nearestPlace({ lat: ll.lat, lng: ll.lng });
+        if (place) {
+          wp.lat = place.lat;
+          wp.lng = place.lng;
+          wp.place = place;
+        }
       }
       dragging = false;
+      map.dragging.enable();
       refreshShape();
     });
     marker.on("click", (e) => {
       L.DomEvent.stop(e);
+      if (moved) return;
       waypoints = waypoints.filter((w) => w.id !== wp.id);
       refreshShape();
     });
@@ -277,33 +409,77 @@ function drawCatalog() {
   if (!map || !catalogLayer) return;
   catalogLayer.clearLayers();
   const zoom = map.getZoom();
+  const showName = zoom >= 16;
   const snapped = snappedIds();
   const plannedIndex = new Map(plannedStops.map((p, i) => [p.id, i]));
   places.forEach((place) => {
     const order = plannedIndex.has(place.id) ? plannedIndex.get(place.id) : -1;
     const onWalk = order >= 0 || snapped.has(place.id);
     const color = onWalk && phase === "done" ? "#2f5d4e" : catColor(place);
-    const label = labelFor(place, onWalk, order, zoom);
-    if (label) {
-      const numbered = onWalk && phase === "done" && zoom < 15;
-      const html = numbered
-        ? `<div class="name-chip on-walk"><div class="num">${label}</div></div>`
-        : `<div class="name-chip ${onWalk ? "on-walk" : ""}"><div class="dot" style="background:${color}"></div><div class="txt">${label}</div></div>`;
-      L.marker([place.lat, place.lng], {
-        icon: L.divIcon({ className: "", html, iconSize: [160, 40], iconAnchor: [80, 8] }),
-        interactive: false, zIndexOffset: onWalk ? 400 : 100,
-      }).addTo(catalogLayer);
-    } else {
-      L.circleMarker([place.lat, place.lng], {
-        radius: onWalk ? 7 : 5.5,
-        color: "#f3efe6",
-        weight: 2,
-        fillColor: color,
-        fillOpacity: 0.95,
-        interactive: false,
-      }).addTo(catalogLayer);
+    const photo = place.photo_url || "placeholder.svg";
+    const walkDone = onWalk && phase === "done";
+    const title = walkDone ? `${order + 1}  ${place.name}` : place.name;
+    const html = `<div class="name-chip ${walkDone ? "on-walk" : ""} ${showName ? "named" : "photo-only"}">
+      <div class="photo-dot" style="border-color:${color}">
+        <img src="${photo}" alt="">
+        ${walkDone && !showName ? `<span class="num">${order + 1}</span>` : ""}
+      </div>
+      ${showName ? `<div class="txt">${title}</div>` : ""}
+    </div>`;
+    const marker = L.marker([place.lat, place.lng], {
+      icon: L.divIcon({
+        className: "",
+        html,
+        iconSize: showName ? [160, 58] : [28, 28],
+        iconAnchor: showName ? [80, 16] : [14, 14],
+      }),
+      interactive: phase === "review" || phase === "done",
+      zIndexOffset: onWalk ? 400 : 100,
+    }).addTo(catalogLayer);
+    if (phase === "review" || phase === "done") {
+      marker.on("click", (e) => {
+        L.DomEvent.stop(e);
+        if (phase === "review") adoptOffRoutePlace(place);
+        else openDoneCard(place);
+      });
     }
   });
+}
+function adoptOffRoutePlace(place) {
+  if (phase !== "review") return;
+  if (snappedIds().has(place.id)) {
+    toast(place.name + " is already on the walk.");
+    return;
+  }
+  const already = candidates.find((c) => c.id === place.id);
+  if (already && already.verdict === "pending" && !adoptRestore) {
+    focusPlaceId = place.id;
+    openCard();
+    return;
+  }
+  if (already && already.verdict === "yes") {
+    toast(place.name + " is already in range.");
+    return;
+  }
+  const resumeId = reviewCurrentId || pending()[0]?.id || null;
+  const wp = {
+    lat: place.lat,
+    lng: place.lng,
+    place: null,
+    tentative: true,
+    targetId: place.id,
+    id: "wp-" + Date.now(),
+  };
+  waypoints.push(wp);
+  adoptRestore = { wpId: wp.id, resumeId, targetId: place.id };
+  rebuildCandidates();
+  const card = candidates.find((c) => c.id === place.id);
+  if (card) card.verdict = "pending";
+  drawRubber();
+  drawHandles();
+  focusPlaceId = place.id;
+  hint("Add this stop?", "❤️ keep the detour. ✕ cancel and go back.");
+  openCard();
 }
 function rebuildCandidates() {
   const guide = controlPoints();
@@ -321,7 +497,7 @@ function rebuildCandidates() {
 }
 function drawReviewPins() {
   pinLayer.clearLayers();
-  const current = pending()[0];
+  const current = (reviewCurrentId && candidates.find((p) => p.id === reviewCurrentId)) || pending()[0];
   candidates.forEach((place) => {
     if (place.verdict === "no") return;
     if (current && place.id === current.id) {
@@ -345,9 +521,47 @@ function closeReviewPopup() {
     reviewPopup = null;
   }
 }
+function confirmReviewPlace(place, keep) {
+  if (adoptRestore && adoptRestore.targetId === place.id) {
+    const restore = adoptRestore;
+    adoptRestore = null;
+    if (keep) {
+      const wp = waypoints.find((w) => w.id === restore.wpId);
+      if (wp) {
+        wp.place = place;
+        wp.tentative = false;
+      }
+      place.verdict = "yes";
+      rebuildCandidates();
+      drawRubber();
+      drawHandles();
+      openCard();
+      return;
+    }
+    waypoints = waypoints.filter((w) => w.id !== restore.wpId);
+    rebuildCandidates();
+    drawRubber();
+    drawHandles();
+    focusPlaceId = restore.resumeId;
+    openCard();
+    return;
+  }
+  if (keep) {
+    place.verdict = "yes";
+  } else {
+    place.verdict = "no";
+    rejected.push(place.id);
+  }
+  openCard();
+}
 function openCard() {
   closeReviewPopup();
-  const place = pending()[0];
+  let place = pending()[0];
+  if (focusPlaceId) {
+    place = candidates.find((c) => c.id === focusPlaceId && c.verdict === "pending") || place;
+    focusPlaceId = null;
+  }
+  reviewCurrentId = place ? place.id : null;
   if (!place) {
     if (els.sheet) els.sheet.hidden = true;
     els.btnPlan.hidden = false;
@@ -360,7 +574,11 @@ function openCard() {
   els.btnReview.hidden = true;
   els.btnPlan.hidden = false;
   const left = pending().length, total = candidates.length;
-  hint(`${total - left + 1} of ${total}`, "❤️ keep this stop. ✕ skip it.");
+  if (adoptRestore && adoptRestore.targetId === place.id) {
+    hint("Add this stop?", "❤️ keep the detour. ✕ cancel and go back.");
+  } else {
+    hint(`${total - left + 1} of ${total}`, "❤️ keep this stop. ✕ skip it.");
+  }
   drawReviewPins();
   drawCatalog();
   const photo = place.photo_url || "placeholder.svg";
@@ -385,7 +603,7 @@ function openCard() {
   const token = ++flyToken;
   const showPopup = () => {
     if (token !== flyToken) return;
-    if (pending()[0] !== place) return;
+    if (reviewCurrentId !== place.id) return;
     map.once("popupopen", () => {
       const node = reviewPopup && reviewPopup.getElement();
       if (!node) return;
@@ -393,14 +611,11 @@ function openCard() {
       const no = node.querySelector('[data-act="no"]');
       if (yes) yes.addEventListener("click", (e) => {
         e.preventDefault(); e.stopPropagation();
-        place.verdict = "yes";
-        openCard();
+        confirmReviewPlace(place, true);
       });
       if (no) no.addEventListener("click", (e) => {
         e.preventDefault(); e.stopPropagation();
-        place.verdict = "no";
-        rejected.push(place.id);
-        openCard();
+        confirmReviewPlace(place, false);
       });
     });
     reviewPopup.openOn(map);
@@ -431,9 +646,89 @@ function hideSketch() {
   if (rubberLine) { map.removeLayer(rubberLine); rubberLine = null; }
   if (grabLine) { map.removeLayer(grabLine); grabLine = null; }
 }
+function openDoneCard(place) {
+  closeReviewPopup();
+  const onWalk = plannedStops.some((p) => p.id === place.id);
+  const photo = place.photo_url || "placeholder.svg";
+  const html = `<div class="spot-pop">
+    <img src="${photo}" alt="">
+    <div class="spot-pop-name">${place.name}</div>
+    <p class="spot-pop-liner">${place.one_liner || ""}</p>
+    <div class="spot-pop-acts">
+      <button type="button" class="emoji-btn" data-act="no">✕</button>
+      ${onWalk ? "" : `<button type="button" class="emoji-btn" data-act="yes">❤️</button>`}
+    </div>
+  </div>`;
+  reviewPopup = L.popup({
+    closeButton: false,
+    autoClose: true,
+    closeOnClick: true,
+    autoPan: true,
+    className: "spot-popup",
+    maxWidth: 200,
+    offset: [0, -16],
+  }).setLatLng([place.lat, place.lng]).setContent(html);
+  map.once("popupopen", () => {
+    const node = reviewPopup && reviewPopup.getElement();
+    if (!node) return;
+    const no = node.querySelector('[data-act="no"]');
+    const yes = node.querySelector('[data-act="yes"]');
+    if (no) no.addEventListener("click", (e) => {
+      e.preventDefault(); e.stopPropagation();
+      closeReviewPopup();
+    });
+    if (yes) yes.addEventListener("click", (e) => {
+      e.preventDefault(); e.stopPropagation();
+      void addPlaceToPlannedWalk(place);
+    });
+  });
+  reviewPopup.openOn(map);
+}
+async function applyPlannedLine(named, opts) {
+  const reorder = !opts || opts.reorder !== false;
+  const ordered = reorder ? orderStops(named) : named.slice();
+  const line = [];
+  for (let i = 0; i < ordered.length - 1; i++) {
+    const raw = await stitch([entranceOf(ordered[i]), entranceOf(ordered[i + 1])]);
+    if (!raw || raw.length < 2) throw new Error("leg");
+    const leg = stripLoops(raw, [ordered[i], ordered[i + 1]]);
+    if (line.length) line.push(...leg.slice(1));
+    else line.push(...leg);
+  }
+  const cleaned = line;
+  if (streetLayer) map.removeLayer(streetLayer);
+  spurLayer.clearLayers();
+  streetLayer = L.polyline(cleaned.map((p) => [p.lat, p.lng]), {
+    color: "#2f5d4e", weight: 5, opacity: 0.9, interactive: false,
+  }).addTo(map);
+  ordered.forEach((p) => {
+    const door = entranceOf(p);
+    if (haversine(door, p) < 12) return;
+    L.polyline([[door.lat, door.lng], [p.lat, p.lng]], {
+      color: "#2f5d4e", weight: 3, opacity: 0.85, dashArray: "6 8", interactive: false,
+    }).addTo(spurLayer);
+  });
+  plannedStops = ordered;
+  drawCatalog();
+}
+async function addPlaceToPlannedWalk(place) {
+  if (plannedStops.some((p) => p.id === place.id)) {
+    closeReviewPopup();
+    return;
+  }
+  closeReviewPopup();
+  toast("Adding " + place.name + " to the walk.");
+  try {
+    await applyPlannedLine(insertStop(plannedStops, place), { reorder: false });
+  } catch {
+    toast("Could not add that stop to the walk.");
+  }
+}
 function startSelecting() {
   if (!start || !end) return;
   reviewFirst = true;
+  adoptRestore = null;
+  focusPlaceId = null;
   rebuildCandidates();
   els.btnReview.hidden = true;
   els.btnPlan.hidden = false;
@@ -456,7 +751,6 @@ async function planRoute() {
     seen.add(p.id);
     named.push(p);
   });
-  named.sort((a, b) => axisT(entranceOf(a), start, end) - axisT(entranceOf(b), start, end));
   if (named.length < 2) {
     toast("Pick at least two stops before planning.");
     hint("Need two stops", "Yes at least two spots, or snap the line onto two pins, then Plan route.");
@@ -467,40 +761,19 @@ async function planRoute() {
   closeReviewPopup();
   if (els.sheet) els.sheet.hidden = true;
   els.btnPlan.hidden = true;
-  hint("Planning the walk", "One street spine. Nearby stops get a dotted spur.");
+  hint("Planning the walk", "Ordering stops, then walking street to street.");
   hideSketch();
   if (startMarker) { map.removeLayer(startMarker); startMarker = null; }
   if (endMarker) { map.removeLayer(endMarker); endMarker = null; }
   pinLayer.clearLayers();
   handleLayer.clearLayers();
   spurLayer.clearLayers();
+  phase = "done";
   try {
-    const vias = thinVias(named);
-    let line = await stitch(vias.map(entranceOf));
-    const detour = line.reduce((sum, p, i, arr) => i ? sum + haversine(arr[i - 1], p) : 0, 0);
-    const straight = haversine(entranceOf(named[0]), entranceOf(named[named.length - 1]));
-    if (straight > 0 && detour / straight > 1.85) {
-      line = await stitch([entranceOf(named[0]), entranceOf(named[named.length - 1])]);
-    }
-    if (streetLayer) map.removeLayer(streetLayer);
-    streetLayer = L.polyline(line.map((p) => [p.lat, p.lng]), {
-      color: "#2f5d4e", weight: 5, opacity: 0.9, interactive: false,
-    }).addTo(map);
-    named.forEach((p) => {
-      const door = entranceOf(p);
-      const snap = nearestOnLine(door, line);
-      if (snap.distance < 12) return;
-      L.polyline([[snap.point.lat, snap.point.lng], [p.lat, p.lng]], {
-        color: "#2f5d4e", weight: 3, opacity: 0.85, dashArray: "6 8", interactive: false,
-      }).addTo(spurLayer);
-    });
-    plannedStops = named;
-    phase = "done";
-    drawCatalog();
-    map.fitBounds(streetLayer.getBounds(), { padding: [50, 160] });
+    await applyPlannedLine(named);
+    map.fitBounds(streetLayer.getBounds(), { padding: [48, 48] });
     els.hint.hidden = true;
-    els.summary.hidden = false;
-    els.summaryBody.innerHTML = `<ol>${named.map((s) => `<li><strong>${s.name}</strong> — ${s.one_liner}</li>`).join("")}</ol>`;
+    if (els.summary) els.summary.hidden = true;
   } catch {
     els.btnPlan.hidden = false;
     toast("Could not plan that walk. Try two stops farther apart.");
@@ -523,6 +796,15 @@ async function init() {
   places = data.places.filter((p) => inZone(p.lat, p.lng));
   drawCatalog();
   map.on("zoomend", drawCatalog);
+  map.on("mousemove", (e) => {
+    if (!pullingWp) return;
+    pullingWp.lat = e.latlng.lat;
+    pullingWp.lng = e.latlng.lng;
+    drawRubber();
+  });
+  map.on("mouseup", finishPull);
+  document.addEventListener("mouseup", finishPull);
+  document.addEventListener("touchend", finishPull);
 
   map.on("click", (e) => {
     if (dragging) return;

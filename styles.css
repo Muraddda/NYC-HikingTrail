@@ -70,6 +70,12 @@ html, body { height: 100%; background: var(--paper); color: var(--ink); font-fam
   padding: 10px 10px 6px;
   line-height: 1.25;
 }
+.spot-pop-liner {
+  font-size: 12px;
+  line-height: 1.35;
+  color: #4a4740;
+  padding: 0 10px 8px;
+}
 .spot-pop-acts {
   display: flex;
   justify-content: space-between;
@@ -94,12 +100,23 @@ html, body { height: 100%; background: var(--paper); color: var(--ink); font-fam
 .summary { left: 0; right: 0; bottom: 0; background: var(--paper); border-top: 1px solid var(--line); padding: 16px 16px calc(18px + var(--safe-bot)); max-height: 42%; overflow: auto; }
 .summary h2 { font-family: "Fraunces", Georgia, serif; font-size: 22px; font-weight: 500; margin-bottom: 10px; }
 .summary ol { padding-left: 20px; font-size: 15px; line-height: 1.5; }
-.pin-label { background: var(--ink); color: var(--paper); font-size: 11px; font-weight: 600; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; display: flex; align-items: center; justify-content: center; border: 2px solid var(--paper); }
+.pin-label { background: var(--ink); color: var(--paper); font-size: 11px; font-weight: 600; min-width: 28px; height: 28px; padding: 0 6px; border-radius: 14px; display: flex; align-items: center; justify-content: center; border: 2px solid var(--paper); }
 .wp-wrap { display: flex; flex-direction: column; align-items: center; width: 180px; pointer-events: none; }
 .wp-name { background: var(--ink); color: var(--paper); font-size: 12px; padding: 5px 8px; margin-bottom: 4px; max-width: 176px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .active-ring { width: 28px; height: 28px; border: 3px solid #c45c26; border-radius: 50%; background: rgba(196,92,38,.2); }
 .name-chip { display: flex; flex-direction: column; align-items: center; pointer-events: none; }
-.name-chip .dot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid #f3efe6; box-shadow: 0 1px 4px rgba(28,27,24,.25); }
+.name-chip .photo-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid #f3efe6;
+  background: #1c1b18;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(28,27,24,.28);
+  position: relative;
+}
+.name-chip.named .photo-dot { width: 32px; height: 32px; }
+.name-chip .photo-dot img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .name-chip .txt { margin-top: 3px; background: rgba(28,27,24,.88); color: #f3efe6; font-size: 11px; line-height: 1.2; padding: 2px 6px; max-width: 148px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .name-chip.on-walk .txt { background: #2f5d4e; font-size: 12px; white-space: normal; max-width: 160px; }
-.name-chip .num { width: 20px; height: 20px; border-radius: 50%; background: #2f5d4e; color: #f3efe6; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; border: 2px solid #f3efe6; }
+.name-chip .num { position: absolute; right: -4px; bottom: -4px; width: 16px; height: 16px; border-radius: 50%; background: #2f5d4e; color: #f3efe6; font-size: 9px; font-weight: 600; display: flex; align-items: center; justify-content: center; border: 2px solid #f3efe6; }
