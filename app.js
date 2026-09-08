@@ -9,6 +9,15 @@ const ZONE_POLY = [
   [40.7048, -73.9976], [40.7016, -74.0008], [40.7004, -74.0088], [40.7006, -74.0168],
   [40.7034, -74.0188], [40.7078, -74.0186], [40.712, -74.0176],
 ];
+const CAT_COLOR = {
+  art: "#c45c26",
+  oddity: "#2f5d4e",
+  history: "#1c1b18",
+  food: "#8a5a2b",
+  bar: "#6b3a4a",
+  shop: "#3d4a5c",
+  other: "#4a4740",
+};
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -27,6 +36,7 @@ let rubberLine = null, grabLine = null, streetLayer = null;
 let catalogLayer, pinLayer, handleLayer, spurLayer;
 let candidates = [];
 let rejected = [];
+let plannedStops = [];
 let phase = "idle";
 let dragging = false;
 let toastTimer = null;
@@ -98,7 +108,6 @@ async function stitch(points) {
   if (lineLeavesZone(line)) throw new Error("off-island");
   return line;
 }
-
 function hint(title, body) {
   els.hint.hidden = false;
   els.hintTitle.textContent = title;
@@ -145,7 +154,15 @@ function controlPoints() {
 }
 function pending() { return candidates.filter((p) => p.verdict === "pending"); }
 function yeses() { return candidates.filter((p) => p.verdict === "yes"); }
-
+function shortName(name) {
+  if (name.length <= 18) return name;
+  const bits = name.split(" ");
+  if (bits.length === 1) return name.slice(0, 16) + "…";
+  return bits.slice(0, 2).join(" ");
+}
+function catColor(place) {
+  return CAT_COLOR[place.category] || "#1c1b18";
+}
 function drawRubber() {
   const latlngs = controlPoints().map((p) => [p.lat, p.lng]);
   if (rubberLine) rubberLine.setLatLngs(latlngs).setStyle({ opacity: 0.95 });
@@ -180,8 +197,8 @@ function drawHandles() {
       e.target.setIcon(handleIcon(wp));
       drawRubber();
     });
-    marker.on("dragend", (e) => {
-      const ll = e.target.getLatLng();
+    marker.on("dragend", () => {
+      const ll = marker.getLatLng();
       if (!inZone(ll.lat, ll.lng)) {
         toast("Stay south of Chambers, on Manhattan.");
         waypoints = waypoints.filter((w) => w.id !== wp.id);
@@ -196,16 +213,45 @@ function drawHandles() {
     });
   });
 }
+function labelFor(place, onWalk, order, zoom) {
+  if (onWalk && phase === "done") {
+    return zoom >= 15 ? `${order + 1}  ${place.name}` : String(order + 1);
+  }
+  if (onWalk) return zoom >= 15 ? place.name : "";
+  if (zoom >= 18) return place.name;
+  if (zoom >= 16) return shortName(place.name);
+  return "";
+}
 function drawCatalog() {
+  if (!map || !catalogLayer) return;
   catalogLayer.clearLayers();
+  const zoom = map.getZoom();
   const snapped = snappedIds();
+  const plannedIndex = new Map(plannedStops.map((p, i) => [p.id, i]));
   places.forEach((place) => {
-    L.circleMarker([place.lat, place.lng], {
-      radius: snapped.has(place.id) ? 8 : 5.5,
-      color: "#f3efe6", weight: 2,
-      fillColor: snapped.has(place.id) ? "#c45c26" : "#1c1b18",
-      fillOpacity: 0.95, interactive: false,
-    }).addTo(catalogLayer);
+    const order = plannedIndex.has(place.id) ? plannedIndex.get(place.id) : -1;
+    const onWalk = order >= 0 || snapped.has(place.id);
+    const color = onWalk && phase === "done" ? "#2f5d4e" : catColor(place);
+    const label = labelFor(place, onWalk, order, zoom);
+    if (label) {
+      const numbered = onWalk && phase === "done" && zoom < 15;
+      const html = numbered
+        ? `<div class="name-chip on-walk"><div class="num">${label}</div></div>`
+        : `<div class="name-chip ${onWalk ? "on-walk" : ""}"><div class="dot" style="background:${color}"></div><div class="txt">${label}</div></div>`;
+      L.marker([place.lat, place.lng], {
+        icon: L.divIcon({ className: "", html, iconSize: [160, 40], iconAnchor: [80, 8] }),
+        interactive: false, zIndexOffset: onWalk ? 400 : 100,
+      }).addTo(catalogLayer);
+    } else {
+      L.circleMarker([place.lat, place.lng], {
+        radius: onWalk ? 7 : 5.5,
+        color: "#f3efe6",
+        weight: 2,
+        fillColor: color,
+        fillOpacity: 0.95,
+        interactive: false,
+      }).addTo(catalogLayer);
+    }
   });
 }
 function rebuildCandidates() {
@@ -230,10 +276,6 @@ function drawReviewPins() {
     if (current && place.id === current.id) {
       L.marker([place.lat, place.lng], {
         icon: L.divIcon({ className: "", html: `<div class="active-ring"></div>`, iconSize: [28, 28], iconAnchor: [14, 14] }),
-        interactive: false,
-      }).addTo(pinLayer);
-      L.marker([place.lat, place.lng], {
-        icon: L.divIcon({ className: "", html: `<div class="wp-name">${place.name}</div>`, iconSize: [0, 0], iconAnchor: [0, 18] }),
         interactive: false,
       }).addTo(pinLayer);
     } else {
@@ -268,6 +310,7 @@ function openCard() {
   els.placeLink.href = place.source_url;
   els.btnUndo.hidden = rejected.length === 0;
   drawReviewPins();
+  drawCatalog();
   map.panTo([place.lat, place.lng]);
 }
 function refreshShape() {
@@ -326,7 +369,6 @@ async function planRoute() {
   pinLayer.clearLayers();
   handleLayer.clearLayers();
   spurLayer.clearLayers();
-  drawCatalog();
   try {
     const line = await stitch(named.map(entranceOf));
     if (streetLayer) map.removeLayer(streetLayer);
@@ -343,8 +385,10 @@ async function planRoute() {
         radius: 4, color: "#f3efe6", weight: 1, fillColor: "#2f5d4e", fillOpacity: 1, interactive: false,
       }).addTo(spurLayer);
     });
-    map.fitBounds(streetLayer.getBounds(), { padding: [50, 160] });
+    plannedStops = named;
     phase = "done";
+    drawCatalog();
+    map.fitBounds(streetLayer.getBounds(), { padding: [50, 160] });
     els.hint.hidden = true;
     els.summary.hidden = false;
     els.summaryBody.innerHTML = `<ol>${named.map((s) => `<li><strong>${s.name}</strong> — ${s.one_liner}</li>`).join("")}</ol>`;
@@ -353,7 +397,6 @@ async function planRoute() {
     toast("Could not plan that walk. Try two stops farther apart.");
   }
 }
-
 async function init() {
   map = L.map("map", { zoomControl: false }).setView([40.7072, -74.0105], 15);
   L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
@@ -365,11 +408,10 @@ async function init() {
   pinLayer = L.layerGroup().addTo(map);
   handleLayer = L.layerGroup().addTo(map);
   spurLayer = L.layerGroup().addTo(map);
-
   const data = await fetch("places.json").then((r) => r.json());
   places = data.places.filter((p) => inZone(p.lat, p.lng));
   drawCatalog();
-
+  map.on("zoomend", drawCatalog);
   map.on("click", (e) => {
     if (dragging) return;
     if (phase === "done" || phase === "review" || phase === "shaping") return;
@@ -406,7 +448,6 @@ async function init() {
       refreshShape();
     }
   });
-
   els.btnClear.addEventListener("click", () => location.reload());
   els.btnReview.addEventListener("click", startSelecting);
   els.btnPlan.addEventListener("click", () => void planRoute());
@@ -424,5 +465,4 @@ async function init() {
     openCard();
   });
 }
-
 init().catch(() => hint("Could not load places", "Make sure places.json sits next to this page."));
