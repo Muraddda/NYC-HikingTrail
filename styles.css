@@ -26,6 +26,13 @@ html, body { height: 100%; background: var(--paper); color: var(--ink); font-fam
 .ghost-btn { border: 1px solid var(--line); background: rgba(243, 239, 230, 0.92); color: var(--ink); font: inherit; font-size: 13px; padding: 10px 14px; box-shadow: var(--shadow); }
 .primary-btn { background: #1c1b18; color: #f3efe6; border-color: #1c1b18; }
 .ghost-btn[hidden] { display: none; }
+.legend { left: 16px; top: calc(78px + var(--safe-top)); background: rgba(243,239,230,.92); border: 1px solid var(--line); padding: 6px 8px; font-size: 10px; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; max-width: 70%; }
+.swatch { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 3px; }
+.swatch.art { background: #c45c26; }
+.swatch.oddity { background: #2f5d4e; }
+.swatch.history { background: #1c1b18; }
+.swatch.food { background: #8a5a2b; }
+.swatch.bar { background: #6b3a4a; }
 .hint { left: 16px; right: 16px; bottom: calc(24px + var(--safe-bot)); background: var(--ink); color: var(--paper); padding: 16px 18px; box-shadow: var(--shadow); font-size: 15px; line-height: 1.35; }
 .hint strong { font-family: "Fraunces", Georgia, serif; display: block; margin-bottom: 4px; font-size: 17px; font-weight: 500; }
 .hint[hidden], .toast[hidden], .sheet[hidden], .summary[hidden] { display: none; }
@@ -41,10 +48,15 @@ html, body { height: 100%; background: var(--paper); color: var(--ink); font-fam
 .btn.secondary { background: transparent; color: var(--ink); }
 .undo-row { margin-top: 10px; display: flex; justify-content: space-between; }
 .undo-row button { border: 0; background: none; color: var(--ink-soft); font: inherit; font-size: 13px; text-decoration: underline; }
-.summary { left: 0; right: 0; bottom: 0; background: var(--paper); border-top: 1px solid var(--line); padding: 16px 16px calc(18px + var(--safe-bot)); max-height: 46%; overflow: auto; }
+.summary { left: 0; right: 0; bottom: 0; background: var(--paper); border-top: 1px solid var(--line); padding: 16px 16px calc(18px + var(--safe-bot)); max-height: 42%; overflow: auto; }
 .summary h2 { font-family: "Fraunces", Georgia, serif; font-size: 22px; font-weight: 500; margin-bottom: 10px; }
 .summary ol { padding-left: 20px; font-size: 15px; line-height: 1.5; }
 .pin-label { background: var(--ink); color: var(--paper); font-size: 11px; font-weight: 600; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; display: flex; align-items: center; justify-content: center; border: 2px solid var(--paper); }
 .wp-wrap { display: flex; flex-direction: column; align-items: center; width: 180px; pointer-events: none; }
 .wp-name { background: var(--ink); color: var(--paper); font-size: 12px; padding: 5px 8px; margin-bottom: 4px; max-width: 176px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .active-ring { width: 28px; height: 28px; border: 3px solid #c45c26; border-radius: 50%; background: rgba(196,92,38,.2); }
+.name-chip { display: flex; flex-direction: column; align-items: center; pointer-events: none; }
+.name-chip .dot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid #f3efe6; box-shadow: 0 1px 4px rgba(28,27,24,.25); }
+.name-chip .txt { margin-top: 3px; background: rgba(28,27,24,.88); color: #f3efe6; font-size: 11px; line-height: 1.2; padding: 2px 6px; max-width: 148px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.name-chip.on-walk .txt { background: #2f5d4e; font-size: 12px; white-space: normal; max-width: 160px; }
+.name-chip .num { width: 20px; height: 20px; border-radius: 50%; background: #2f5d4e; color: #f3efe6; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; border: 2px solid #f3efe6; }
